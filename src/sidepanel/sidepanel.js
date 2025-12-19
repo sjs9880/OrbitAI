@@ -299,15 +299,19 @@ async function analyzeIntent(userText) {
             .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content.substring(0, 100)}`) // 내용이 길면 100자로 축약
             .join('\n');
 
-        // 프롬프트에 맥락(Context) 추가
-        const promptWithContext = ROUTER_PROMPT +
-            `\n\n[Recent Conversation History]\n${recentHistory || "(없음)"}` +
-            `\n\n[User Input]\n${userText}`;
+        // [System] 역할 및 분류 규칙 (ROUTER_PROMPT 포함)
+        const systemPrompt = `당신은 대화의 맥락을 고려하여 사용자의 의도를 분류하는 라우터입니다.
+다음 분류 규칙을 엄격히 따르세요:
+${ROUTER_PROMPT}`;
 
-        const response = await aiService.generateIsolated(
-            "당신은 대화의 맥락을 고려하여 사용자의 의도를 분류하는 라우터입니다.",
-            promptWithContext
-        );
+        // [User] 판단 대상 데이터 (히스토리 + 입력)
+        const userPrompt = `[Recent Conversation History]
+${recentHistory || "(없음)"}
+
+[User Input]
+${userText}`;
+
+        const response = await aiService.generateIsolated(systemPrompt, userPrompt);
 
         const cleanResponse = response.trim().toUpperCase();
 

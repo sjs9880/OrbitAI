@@ -208,10 +208,19 @@ export class AIService {
             const modelInterface = findAIModel();
             if (!modelInterface) throw new Error("Local AI 모델을 찾을 수 없습니다.");
 
-            // 독립 세션 생성 (시스템 프롬프트 적용)
-            session = await modelInterface.create({
-                systemPrompt: systemPrompt
-            });
+            // [변경] 최신 표준: initialPrompts를 사용하여 시스템 역할 부여
+            const params = {
+                initialPrompts: [{ role: 'system', content: systemPrompt }]
+            };
+
+            try {
+                // 표준 방식 시도
+                session = await modelInterface.create(params);
+            } catch (e) {
+                console.warn("표준 세션 생성 실패, 구버전 속성(systemPrompt) 시도");
+                // 구버전 브라우저 호환성 Fallback
+                session = await modelInterface.create({ systemPrompt: systemPrompt });
+            }
 
             // 프롬프트 실행 (비-스트리밍)
             const result = await session.prompt(userPrompt);

@@ -75,16 +75,20 @@ export class SessionManager {
      * AI를 사용해 대화 내용 요약 (Local AI 사용)
      */
     async generateSummary(messages) {
-        // 메시지 텍스트만 추출
-        const conversationText = messages.map(m => `${m.role}: ${m.content}`).join('\n');
-        const prompt = `다음 대화 내용을 5단어 이내의 짧은 한국어 제목으로 요약해주세요. 결과만 출력하세요:\n\n${conversationText}`;
+        // [System] 역할 및 제약 조건 (규칙)
+        const systemPrompt = `당신은 대화 내용을 요약하여 제목을 짓는 AI입니다.
+다음 규칙을 엄격히 따르세요:
+1. 5단어 이내의 짧은 한국어로 요약할 것.
+2. 부가적인 설명 없이 결과 텍스트만 출력할 것.
+3. 따옴표나 특수문자를 포함하지 말 것.`;
 
-        // Local AI를 위한 시스템 프롬프트
-        const systemPrompt = "당신은 대화 내용을 요약하여 짧은 제목을 짓는 AI입니다.";
+        // [User] 데이터 (대화 내용)
+        const conversationText = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+        const userPrompt = `[Conversation Data]\n${conversationText}`;
 
         try {
             // Local AI 독립 세션 생성 및 실행
-            const result = await this.aiService.generateIsolated(systemPrompt, prompt);
+            const result = await this.aiService.generateIsolated(systemPrompt, userPrompt);
             return result.trim().replace(/^["']|["']$/g, ''); // 따옴표 제거
         } catch (e) {
             console.error("Local AI 요약 중 오류:", e);

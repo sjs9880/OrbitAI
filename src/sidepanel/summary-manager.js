@@ -247,16 +247,25 @@ export class SummaryManager {
         if (text.length < 10000) {
             this.uiManager.updateBubble(statusBubble, "텍스트가 짧아 한 번에 분석합니다...");
 
-            const prompt = `<Action Instruction>\n다음 웹 페이지의 내용을 핵심 사항을 중심으로 요약해 알기 쉽게 재구성 하여 작성해주세요.\n\n[Page Info]\nTitle: ${tabInfo.title}\nURL: ${tabInfo.url}\n\n[Page Content]\n${text}</Action Instruction>`;
+            // [System] 요약 규칙
+            const systemPrompt = `당신은 텍스트 요약 전문가입니다.
+다음 지침에 따라 요약하세요:
+1. 웹 페이지의 핵심 내용을 중심으로 알기 쉽게 재구성할 것.
+2. 짧고 간결하게 작성할 것.`;
+
+            // [User] 페이지 데이터
+            const userPrompt = `[Page Info]
+Title: ${tabInfo.title}
+URL: ${tabInfo.url}
+
+[Page Content]
+${text}`;
 
             const sessionName = `[Page Summary] ${tabInfo.title}`;
-            this.callbacks.saveDebugLog('REQUEST', prompt, sessionName);
+            this.callbacks.saveDebugLog('REQUEST', userPrompt, sessionName);
 
             try {
-                const summary = await this.aiService.generateIsolated(
-                    "당신은 텍스트 요약 전문가입니다. 주어진 텍스트의 핵심을 간략히 요약하세요.",
-                    prompt
-                );
+                const summary = await this.aiService.generateIsolated(systemPrompt, userPrompt);
                 this.uiManager.updateBubble(statusBubble, summary);
                 this.callbacks.saveDebugLog('RESPONSE', summary, sessionName);
                 this.uiManager.setStatus("요약 완료", "#10b981");
@@ -284,13 +293,15 @@ export class SummaryManager {
             const progressMsg = `🔄 로컬 AI 분석 중... (${i + 1}/${chunks.length} 파트)`;
             this.uiManager.updateBubble(statusBubble, progressMsg);
 
-            // 프롬프트에 문맥 정보 주입 (Context Injection)
-            const systemPrompt = "당신은 텍스트 요약 전문가입니다. 주어진 텍스트의 핵심을 간략히 요약하세요.";
-            const chunkPrompt = `
-이 글의 제목은 '${tabInfo.title}'입니다.
-다음은 전체 글의 ${i + 1}/${chunks.length}번째 부분입니다.
-제목과 문맥을 참고하여 핵심 내용을 3문장 이내로 요약해주세요:
+            // [System] 청크 요약 규칙
+            const systemPrompt = `당신은 긴 글의 일부분을 요약하는 전문가입니다.
+다음 규칙을 따르세요:
+1. 제목과 문맥을 참고할 것.
+2. 핵심 내용을 3문장 이내로 간결하게 요약할 것.`;
 
+            // [User] 부분 텍스트
+            const chunkPrompt = `[Page Title]: ${tabInfo.title}
+[Part ${i + 1}/${chunks.length}]
 ${chunks[i]}`;
 
             try {
@@ -317,13 +328,16 @@ ${chunks[i]}`;
             this.uiManager.updateBubble(statusBubble, "✨ 최종 결과 정리 중...");
 
             const combinedText = partialSummaries.join("\n\n");
-            const finalPrompt = `
-이 글의 제목은 '${tabInfo.title}'입니다.
-다음은 긴 글을 여러 부분으로 나누어 요약한 내용들입니다.
-이를 바탕으로 전체 글을 아우르는 최종 요약문을 자연스럽게 작성해주세요.
-형식은 핵심 내용을 요약한 글머리 기호(Bullet points) 리스트로 정리해주세요.
 
-[부분 요약 합본]
+            // [System] 최종 통합 규칙
+            const systemPrompt = `당신은 수집된 요약본을 통합하는 전문 에디터입니다.
+다음 규칙을 따르세요:
+1. 여러 부분으로 나뉜 요약 내용을 하나의 자연스러운 글로 통합할 것.
+2. 핵심 내용을 글머리 기호(Bullet points) 리스트로 정리할 것.`;
+
+            // [User] 통합할 데이터
+            const finalPrompt = `[Page Title]: ${tabInfo.title}
+[Summary Parts]
 ${combinedText}`;
 
             const sessionName = `[Page Summary] ${tabInfo.title}`;
@@ -331,10 +345,7 @@ ${combinedText}`;
             this.callbacks.saveDebugLog('REQUEST', `[Final Synthesis]\n${finalPrompt}`, sessionName);
 
             try {
-                const finalSummary = await this.aiService.generateIsolated(
-                    "당신은 전문 에디터입니다. 파편화된 정보를 하나의 완벽한 글로 통합하세요.",
-                    finalPrompt
-                );
+                const finalSummary = await this.aiService.generateIsolated(systemPrompt, finalPrompt);
                 this.uiManager.updateBubble(statusBubble, finalSummary);
                 this.callbacks.saveDebugLog('RESPONSE', finalSummary, sessionName);
 

@@ -1,14 +1,14 @@
 # OrbitAI : Chrome Gemini Nano 기반 AI 어시스턴트
 이 프로젝트의 모든 코드는 AI를 통해 생성되었습니다.
 
-**OrbitAI**는 Chrome 브라우저에 내장된 **Local AI (Gemini Nano)**와 강력한 **Cloud AI (Gemini 2.0 Flash)**를 결합하여, 빠르고 스마트한 웹 브라우징 경험을 제공하는 **하이브리드 AI 확장 프로그램**입니다.
+**OrbitAI**는 Chrome 브라우저에 내장된 **Local AI (Gemini Nano)**와 강력한 **Cloud AI (Gemini 2.0/2.5 Flash)**를 결합하여, 빠르고 스마트한 웹 브라우징 경험을 제공하는 **하이브리드 AI 확장 프로그램**입니다.
 
 ## 🚀 주요 기능 (Key Features)
 
 ### 1. 🤖 듀얼 AI 모드 (Hybrid AI)
 - **Local AI (Gemini Nano)**: 인터넷 연결 없이 작동, 무제한 무료 사용, 프라이버시 보호. 
   - *기술*: **Smart Chunking**을 통해 긴 문서도 정밀하게 분석.
-- **Cloud AI (Gemini 2.0 Flash)**: 복잡한 추론 및 대용량 텍스트(100k+) 처리.
+- **Cloud AI (Gemini 2.0/2.5 Flash)**: 복잡한 추론 및 대용량 텍스트(100k+) 처리.
   - *기술*: **Grounding(Google Search)** 지원으로 최신 정보 실시간 검색.
 
 ### 2. 📺 유튜브 & 웹 요약 (Smart Summary)

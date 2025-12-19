@@ -292,12 +292,26 @@ function renderChips() {
  */
 async function analyzeIntent(userText) {
     try {
+        // [NEW] 최근 대화 흐름 가져오기 (마지막 4개 메시지 = 2턴)
+        // 너무 많이 가져오면 Local AI 토큰을 낭비하므로 판단에 필요한 최소한만 가져옵니다.
+        const recentHistory = conversationHistory
+            .slice(-4) // 최근 4개만
+            .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content.substring(0, 100)}`) // 내용이 길면 100자로 축약
+            .join('\n');
+
+        // 프롬프트에 맥락(Context) 추가
+        const promptWithContext = ROUTER_PROMPT +
+            `\n\n[Recent Conversation History]\n${recentHistory || "(없음)"}` +
+            `\n\n[User Input]\n${userText}`;
+
         const response = await aiService.generateIsolated(
-            "당신은 사용자의 의도를 분류하는 라우터입니다.",
-            ROUTER_PROMPT + `\n\n[사용자 입력]\n${userText}`
+            "당신은 대화의 맥락을 고려하여 사용자의 의도를 분류하는 라우터입니다.",
+            promptWithContext
         );
 
         const cleanResponse = response.trim().toUpperCase();
+
+        // 키워드 매칭 로직 (기존 동일)
         if (cleanResponse.includes("SUMMARIZE")) return "SUMMARIZE";
         if (cleanResponse.includes("READ_PAGE")) return "READ_PAGE";
         if (cleanResponse.includes("READ_COMMENTS")) return "READ_COMMENTS";
@@ -305,6 +319,8 @@ async function analyzeIntent(userText) {
 
         return "GENERAL";
     } catch (e) {
+        // 에러 발생 시 안전하게 일반 대화로 처리
+        console.warn("[Router] Intent analysis failed:", e);
         return "GENERAL";
     }
 }

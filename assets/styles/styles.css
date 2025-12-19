@@ -671,7 +671,10 @@ body.cloud-mode {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 40%;
+    flex: 1;
+    /* 남은 공간 모두 차지 */
+    min-width: 0;
+    /* Flexbox ellipsis fix */
     margin-left: 10px;
 }
 
@@ -679,11 +682,25 @@ body.cloud-mode {
     padding: 12px;
     background: #111827;
     /* 더 어두운 배경 */
-    overflow-x: auto;
+    /* overflow-x: auto;  pre-wrap 사용 시 불필요 */
     white-space: pre-wrap;
     font-size: 0.8rem;
     color: #d1d5db;
     border-top: 1px solid #374151;
+}
+
+.log-content.log-highlight-white {
+    color: var(--white);
+    background: #1f2937;
+    /* 약간 더 밝은 배경 */
+    border-left: 3px solid var(--primary-color);
+}
+
+.log-content pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    font-family: inherit;
 }
 
 /* 뱃지 스타일 */
@@ -719,6 +736,17 @@ body.cloud-mode {
 .log-type.INFO {
     color: #9ca3af;
     background: rgba(156, 163, 175, 0.15);
+}
+
+.log-type.WARN {
+    color: #b45309;
+    background: rgba(245, 158, 11, 0.15);
+}
+
+.log-category {
+    font-size: 0.7rem;
+    color: #6b7280;
+    font-weight: 500;
 }
 
 .log-model {

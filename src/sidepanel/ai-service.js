@@ -1,5 +1,6 @@
 import { findAIModel } from '../utils/ai-utils.js';
 import { SYSTEM_PROMPT } from './prompt-manager.js';
+import { logger } from '../utils/log-manager.js';
 
 export class AIService {
     constructor() {
@@ -29,7 +30,7 @@ export class AIService {
             }
 
             const availability = await modelInterface.availability();
-            console.log(`모델 가용성 상태: ${availability}`);
+            logger.info('AI-Service', `Model availability: ${availability}`);
 
             if (availability === 'no') {
                 throw new Error("Gemini Nano 모델을 현재 사용할 수 없습니다 (상태: 'no').");
@@ -46,7 +47,7 @@ export class AIService {
                 };
 
                 this.chatSession = await modelInterface.create(params);
-                console.log(`로컬 AI 세션 생성 완료 (온도: ${params.temperature}, TopK: ${params.topK})`);
+                logger.info('AI-Service', `Local AI Session created (Temp: ${params.temperature}, TopK: ${params.topK})`);
 
             } catch (createError) {
                 console.warn("[AIService] 표준 세션 생성 실패, 구버전 호환성 시도:", createError);
@@ -55,7 +56,7 @@ export class AIService {
                     this.chatSession = await modelInterface.create({
                         systemPrompt: SYSTEM_PROMPT
                     });
-                    console.log("로컬 AI 세션 생성 완료 (레거시 방식)");
+                    logger.info('AI-Service', "Local AI Session created (Legacy)");
                 } catch (fallbackError) {
                     throw new Error(`세션 생성 실패: ${createError.message}`);
                 }
@@ -63,7 +64,7 @@ export class AIService {
             return { success: true };
 
         } catch (e) {
-            console.error("초기화 오류:", e);
+            logger.error('AI-Service', "Initialization Error", e);
             return { success: false, error: e.message };
         }
     }
@@ -88,18 +89,22 @@ export class AIService {
     async generate(prompt, onStream, isCloud = false, useSearch = false) {
         // 클라우드 모드 설정 확인 (인자값 또는 내부 상태)
         const useCloud = isCloud || this.isCloudMode;
+        const startTime = Date.now();
 
         try {
+            let result;
             if (useCloud) {
-                return await this._callCloudAI(prompt, onStream, useSearch);
+                result = await this._callCloudAI(prompt, onStream, useSearch);
             } else {
-                return await this._callLocalAI(prompt, onStream); // 로컬 모델은 검색 기능을 지원하지 않음
+                result = await this._callLocalAI(prompt, onStream);
             }
+            const duration = Date.now() - startTime;
+            logger.info('AI-Service', `Generation completed (${duration}ms)`, { mode: useCloud ? 'Cloud' : 'Local' });
+            return result;
         } catch (e) {
             // 로컬 AI 오류 발생 시 자동 복구 로직
-            // 세션 만료, 컨텍스트 유실 등의 경우 재초기화 후 재시도
             if (!useCloud) {
-                console.log(`[자동 복구] 로컬 AI 오류 감지: ${e.message}. 세션 재초기화 중...`);
+                logger.warn('AI-Service', `Local AI Error: ${e.message}. Attempting recovery...`);
 
                 // 기존 세션 정리
                 this.destroy();
@@ -107,10 +112,14 @@ export class AIService {
                 // 초기화 재시도
                 const loadResult = await this.initLocalAI();
                 if (loadResult.success && this.chatSession) {
-                    console.log("[자동 복구] 요청 재시도 중...");
-                    return await this._callLocalAI(prompt, onStream);
+                    logger.info('AI-Service', "Recovery successful, retrying request...");
+                    const retryStart = Date.now();
+                    const result = await this._callLocalAI(prompt, onStream);
+                    logger.info('AI-Service', `Retry completed (${Date.now() - retryStart}ms)`);
+                    return result;
                 }
             }
+            logger.error('AI-Service', "Generation Failed", e);
             throw e;
         }
     }

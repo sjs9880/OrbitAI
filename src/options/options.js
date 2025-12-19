@@ -17,10 +17,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const debugToggle = document.getElementById('debug-toggle');
     const debugLogViewer = document.getElementById('debug-log-viewer');
     const clearLogBtn = document.getElementById('clear-log-btn');
+    const logSearchInput = document.getElementById('log-search-input');
+    const logCategoryFilter = document.getElementById('log-category-filter');
 
     // 전역 변수로 활성 세션 관리
     let activeSession = null;
-    let currentLogFilter = 'ALL'; // 현재 로그 필터 상태
+    let currentLevelFilter = 'ALL'; // INFO, WARN, ERROR
+    let currentCategoryFilter = 'ALL'; // System, AI, etc.
+    let currentSearchTerm = '';
+
     let allLogsCache = []; // 전체 로그 캐시 (필터링용)
     let savedSessionsCache = []; // 세션 제목 매핑용 캐시
 
@@ -58,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 설정 상태 메시지 표시
     function showMsg(text, color) {
+        if (!keyStatusMsg) return;
         keyStatusMsg.textContent = text;
         keyStatusMsg.style.color = color;
         setTimeout(() => {
@@ -208,11 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (api.capabilities) status = (await api.capabilities()).available;
 
             const validStates = ['readily', 'after-download', 'available', 'no-restrictions'];
-            if (validStates.includes(status)) {
-                setGuideState(true);
-            } else {
-                setGuideState(false);
-            }
+            setGuideState(validStates.includes(status));
         } catch (e) {
             setGuideState(false);
         }
@@ -259,8 +261,10 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.sync.get(['geminiApiKey', 'geminiModelId', 'enableDebugLog', 'enableHistory'], (data) => {
         if (data.geminiApiKey && apiKeyInput) {
             apiKeyInput.value = data.geminiApiKey;
-            keyStatusMsg.textContent = "✅ 저장된 API 키가 있습니다.";
-            keyStatusMsg.style.color = "green";
+            if (keyStatusMsg) {
+                keyStatusMsg.textContent = "✅ 저장된 API 키가 있습니다.";
+                keyStatusMsg.style.color = "green";
+            }
         }
         if (modelSelect) {
             // 값이 없으면 'gemini-2.5-flash' 기본값
@@ -270,7 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
             debugToggle.checked = !!data.enableDebugLog;
         }
     });
-
 
     if (saveKeyBtn) {
         saveKeyBtn.addEventListener('click', () => {
@@ -307,140 +310,259 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- 로그 뷰어 로직 (New) ---
 
+    // 1. 검색어 입력 이벤트
+    if (logSearchInput) {
+        logSearchInput.addEventListener('input', (e) => {
+            currentSearchTerm = e.target.value.toLowerCase();
+            renderLogs(allLogsCache);
+        });
+    }
 
-    // --- 로그 뷰어 로직 ---
-    // 필터 버튼 이벤트 연결
+    // 2. 카테고리 필터 이벤트
+    if (logCategoryFilter) {
+        logCategoryFilter.addEventListener('change', (e) => {
+            currentCategoryFilter = e.target.value;
+            renderLogs(allLogsCache);
+        });
+    }
+
+    // 3. 레벨 필터 버튼 이벤트
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            // 활성 상태 변경
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
 
-            // 필터 적용
-            currentLogFilter = btn.dataset.filter;
+            currentLevelFilter = btn.dataset.filter; // ALL, INFO, WARN, ERROR
             renderLogs(allLogsCache);
         });
     });
 
     function renderLogs(logs) {
         if (!debugLogViewer) return;
-        allLogsCache = logs || []; // 캐시 업데이트
+        allLogsCache = logs || [];
 
         debugLogViewer.innerHTML = '';
+        console.log("Rendering logs:", allLogsCache.length); // 디버깅용
 
-        // 필터링 적용
-        let filteredLogs = allLogsCache;
-        if (currentLogFilter !== 'ALL') {
-            if (currentLogFilter === 'SYSTEM') {
-                // SYSTEM은 INFO 등 일반 로그 포함, 또는 type이 'response'인 경우 등 정의 필요
-                // 여기서는 type이 'RESPONSE'이거나 'INFO'인 것을 SYSTEM으로 간주예정이었으나,
-                // 기존 코드에서 type을 어떻게 저장하는지 확인.
-                // saveDebugLog 호출: 'REQUEST', 'RESPONSE', 'ERROR', 'INFO'
-                // 따라서 SYSTEM -> RESPONSE, INFO
-                // USER -> REQUEST
-                // ERROR -> ERROR
-                filteredLogs = allLogsCache.filter(l => l.type === 'RESPONSE' || l.type === 'INFO' || l.type === 'system');
-            } else if (currentLogFilter === 'USER') {
-                filteredLogs = allLogsCache.filter(l => l.type === 'REQUEST' || l.type === 'user');
-            } else {
-                filteredLogs = allLogsCache.filter(l => l.type === currentLogFilter);
-            }
-        }
+        try {
+            // 필터링 적용
+            const filteredLogs = allLogsCache.filter(log => {
+                // Level Check (field name: level or type for backward compat)
+                const logLevel = (log.level || log.type || 'INFO').toUpperCase();
 
-        if (!filteredLogs || filteredLogs.length === 0) {
-            debugLogViewer.innerHTML = '<div class="log-placeholder">표시할 로그가 없습니다.</div>';
-            return;
-        }
+                // 기존 로그 호환성: REQUEST/RESPONSE/USER/SYSTEM -> INFO 처리
+                let normalizedLevel = logLevel;
+                if (['REQUEST', 'RESPONSE', 'USER', 'SYSTEM'].includes(logLevel)) normalizedLevel = 'INFO';
 
-        filteredLogs.forEach(log => {
-            // Details/Summary 구조로 변경
-            const details = document.createElement('details');
-            details.className = 'log-entry-details';
-            details.open = false; // 기본적으로 닫힘
-
-            const summary = document.createElement('summary');
-            summary.className = 'log-entry-summary';
-
-            const timeStr = new Date(log.timestamp).toLocaleTimeString();
-
-            // 모델 배지
-            let modelBadge = '';
-            if (log.model) {
-                const modelClass = log.model === 'Cloud' ? 'model-cloud' : 'model-local';
-                modelBadge = `<span class="log-model ${modelClass}">${log.model}</span>`;
-            }
-
-            // 세션 배지 (ID 기반 최신 제목 조회)
-            let sessionBadge = '';
-            let sessionName = log.sessionName;
-
-            // ID가 있는데 제목이 없거나, 기본값인 경우 업데이트 시도
-            if (log.sessionId && (!sessionName || sessionName === '새로운 대화' || sessionName === '알 수 없음')) {
-                const session = savedSessionsCache.find(s => s.id === log.sessionId);
-                if (session && session.title) {
-                    sessionName = session.title;
+                if (currentLevelFilter !== 'ALL' && normalizedLevel !== currentLevelFilter) {
+                    return false;
                 }
+
+                // Category Check
+                // 구형 로그는 category가 없을 수 있음 -> 'System' 또는 'Unknown' 취급
+                const logCategory = log.category || 'System';
+                if (currentCategoryFilter !== 'ALL' && logCategory !== currentCategoryFilter) {
+                    return false;
+                }
+
+                // Search Check
+                if (currentSearchTerm) {
+                    const msg = (log.message || log.content || "").toString().toLowerCase();
+                    const dataStr = log.data ? JSON.stringify(log.data).toLowerCase() : "";
+                    if (!msg.includes(currentSearchTerm) && !dataStr.includes(currentSearchTerm)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+
+
+            if (filteredLogs.length === 0) {
+                debugLogViewer.innerHTML = '<div class="log-placeholder">조건에 맞는 로그가 없습니다.</div>';
+                return;
             }
 
-            // '새로운 대화'는 표시하지 않음 (사용자 요청)
-            if (sessionName === '새로운 대화') sessionName = '';
-            // 아직도 '새로운 대화'라면 현재 세션일 수 있음 (저장 목록에 없을 수 있음)
-            // currentSession은 sidepanel에서 관리하므로 options에서는 접근 불가. 
-            // 다만 storage.local.currentSession을 읽을 수는 있음 (실시간)
+            // 렌더링 최적화: DocumentFragment 사용
+            const fragment = document.createDocumentFragment();
 
-            if (log.sessionId) {
-                // 사용자 요청: 제목 대신 세션 ID(명) 표시
-                const shortId = log.sessionId.substring(0, 8);
-                const tooltip = sessionName ? `${sessionName} (${log.sessionId})` : log.sessionId;
-                sessionBadge = `<span class="log-session" title="${tooltip}">Session ${shortId}</span>`;
-            } else if (sessionName) {
-                // ID가 없을 때만 이름 사용 (구버전 로그 호환)
-                sessionBadge = `<span class="log-session" title="${sessionName}">${sessionName}</span>`;
-            }
+            filteredLogs.forEach(log => {
+                const details = document.createElement('details');
+                details.className = 'log-entry-details';
 
-            // 요약 텍스트 (본문 앞부분 50자)
-            let previewText = "";
-            if (typeof log.content === 'object') {
-                previewText = JSON.stringify(log.content).substring(0, 50) + "...";
-            } else {
-                previewText = String(log.content).substring(0, 50) + (String(log.content).length > 50 ? "..." : "");
-            }
+                // 메인 텍스트 및 중요도 판별을 위한 사전 분석
+                let mainText = log.message || log.content || "";
+                if (typeof mainText === 'object') mainText = JSON.stringify(mainText);
 
-            summary.innerHTML = `
-                <div class="summary-left">
-                    <span class="log-time">[${timeStr}]</span>
-                    <span class="log-type ${log.type}">${log.type}</span>
-                    ${modelBadge}
-                    ${sessionBadge}
-                </div>
-                <div class="summary-preview">${previewText}</div>
-            `;
+                const category = log.category || 'System';
+                let isImportantAI = false;
 
-            details.appendChild(summary);
+                // 1) AI Service Logs
+                if (category === 'AI' && (mainText.includes('Request Sent') || mainText.includes('Response Received'))) {
+                    isImportantAI = true;
+                }
+                // 2) SummaryManager Logs
+                else if (category === 'SummaryManager') {
+                    if (log.data) {
+                        if (typeof log.data === 'object' && (log.data.type === 'REQUEST' || log.data.type === 'RESPONSE')) {
+                            isImportantAI = true;
+                        } else if (typeof log.data === 'string' && (log.data.includes('REQUEST') || log.data.includes('RESPONSE'))) {
+                            isImportantAI = true;
+                        }
+                    }
+                }
 
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'log-content';
-            if (typeof log.content === 'object') {
-                contentDiv.innerHTML = syntaxHighlight(log.content);
-            } else {
-                contentDiv.textContent = log.content;
-            }
-            details.appendChild(contentDiv);
+                // 스타일 적용 (에러/경고/중요AI)
+                if (log.level === 'ERROR' || log.type === 'ERROR') {
+                    details.style.borderLeft = "4px solid #ef4444"; // Red
+                    details.style.background = "#fef2f2";
+                    details.style.color = "#b91c1c"; // Text color for error
+                } else if (log.level === 'WARN') {
+                    details.style.borderLeft = "4px solid #f59e0b"; // Amber
+                    details.style.background = "#fffbeb";
+                    details.style.color = "#b45309";
+                } else if (isImportantAI) {
+                    details.style.borderLeft = "4px solid #ffffff"; // White Highlight
+                    details.style.background = "rgba(255, 255, 255, 0.05)"; // Dark theme friendly highlight
+                }
 
-            debugLogViewer.appendChild(details);
-        });
+                const summary = document.createElement('summary');
+                summary.className = 'log-entry-summary';
 
-        // 스크롤 최하단 이동 (requestAnimationFrame 사용으로 렌더링 후 실행 보장)
-        requestAnimationFrame(() => {
-            debugLogViewer.scrollTop = debugLogViewer.scrollHeight;
-        });
+                // Time
+                let timeStr = "Unknown Time";
+                if (log.timestamp) {
+                    try {
+                        timeStr = new Date(log.timestamp).toLocaleTimeString();
+                    } catch (e) { timeStr = "Invalid Date"; }
+                }
+
+                // Level Chips
+                const level = log.level || log.type || 'INFO';
+                // category 변수는 위에서 정의됨
+
+                // [NEW] Main Text Enhancement (Title Customization)
+                if (category === 'AI') {
+                    // 1. Request Sent: <UserQuery> 추출
+                    if (mainText.includes('Request Sent')) {
+                        let promptText = "";
+                        if (log.data && typeof log.data === 'object' && log.data.prompt) {
+                            promptText = log.data.prompt;
+                        } else if (typeof log.data === 'string') {
+                            try { const d = JSON.parse(log.data); if (d.prompt) promptText = d.prompt; } catch (e) { promptText = log.data; }
+                        }
+
+                        // <UserQuery> 태그 내용 추출
+                        const match = promptText.match(/<UserQuery>([\s\S]*?)<\/UserQuery>/);
+                        if (match && match[1]) {
+                            const queryContent = match[1].trim().replace(/\n/g, ' ').substring(0, 200); // 200자 제한
+                            mainText += ` : ${queryContent}${match[1].length > 200 ? '...' : ''}`;
+                        } else if (promptText) {
+                            // 태그가 없으면 전체에서 일부 추출 (User Input 등)
+                            // Fallback: [User Input] 캡션 찾기
+                            const inputMatch = promptText.match(/\[User Input\]\s*([\s\S]*?)$/);
+                            if (inputMatch && inputMatch[1]) {
+                                const content = inputMatch[1].trim().replace(/\n/g, ' ').substring(0, 200);
+                                mainText += ` : ${content}...`;
+                            }
+                        }
+                    }
+                    // 2. Response Received: 응답 내용 추출
+                    else if (mainText.includes('Response Received')) {
+                        let responseText = "";
+                        if (log.data && typeof log.data === 'object' && log.data.response) {
+                            responseText = log.data.response;
+                        } else if (typeof log.data === 'string') {
+                            try { const d = JSON.parse(log.data); if (d.response) responseText = d.response; } catch (e) { responseText = log.data; }
+                        }
+
+                        if (responseText) {
+                            const cleanResponse = responseText.replace(/\n/g, ' ').substring(0, 200); // 200자 제한
+                            mainText += ` : ${cleanResponse}${responseText.length > 200 ? '...' : ''}`;
+                        }
+                    }
+                }
+
+                const previewText = String(mainText).substring(0, 250) + (String(mainText).length > 250 ? "..." : "");
+
+                // [NEW] Mode Badge (Local/Cloud) logic
+                let modeBadge = '';
+                let mode = '';
+                // 1. log.data.mode 확인
+                if (log.data && log.data.mode) {
+                    mode = log.data.mode;
+                }
+                // 2. data가 없으면 message에서 추론 (하위 호환)
+                else if (typeof log.data === 'string' && log.data.includes('mode')) {
+                    try { const d = JSON.parse(log.data); if (d.mode) mode = d.mode; } catch (e) { }
+                }
+
+                if (mode) {
+                    const badgeClass = mode.toLowerCase() === 'cloud' ? 'model-cloud' : 'model-local';
+                    modeBadge = `<span class="log-model ${badgeClass}">${mode}</span>`;
+                }
+
+                // [NEW] Highlight Logic (Request/Response)
+                let contentClass = 'log-content';
+                if (isImportantAI) {
+                    contentClass += ' log-highlight-white';
+                }
+
+                summary.innerHTML = `
+                    <div class="summary-left">
+                        <span class="log-time">${timeStr}</span>
+                        <span class="log-type ${level}">${level}</span>
+                        <span class="log-category">[${category}]</span>
+                        ${modeBadge}
+                        <span class="summary-preview">${previewText}</span>
+                    </div>
+                `;
+                details.appendChild(summary);
+
+                // Full Content
+                const contentDiv = document.createElement('div');
+                contentDiv.className = contentClass;
+
+                // Message
+                const msgP = document.createElement('p');
+                msgP.style.fontWeight = 'bold';
+                msgP.style.marginBottom = '8px';
+                msgP.textContent = String(mainText); // 전체 메시지
+                contentDiv.appendChild(msgP);
+
+                // Data (JSON)
+                if (log.data) {
+                    const jsonPre = document.createElement('pre');
+                    try {
+                        jsonPre.innerHTML = syntaxHighlight(log.data);
+                    } catch (e) {
+                        jsonPre.textContent = JSON.stringify(log.data, null, 2);
+                        console.warn("JSON Highlight failed:", e);
+                    }
+                    contentDiv.appendChild(jsonPre);
+                }
+
+                details.appendChild(contentDiv);
+                fragment.appendChild(details);
+            });
+
+            debugLogViewer.appendChild(fragment);
+
+        } catch (error) {
+            console.error("Render Logs Failed:", error);
+            debugLogViewer.innerHTML = `<div class="log-placeholder" style="color:red">로그 렌더링 중 오류가 발생했습니다.<br>${error.message}</div>`;
+        }
     }
 
     function syntaxHighlight(json) {
+        if (json === undefined || json === null) return '';
         if (typeof json !== 'string') {
             json = JSON.stringify(json, undefined, 2);
         }
+        if (!json) return '';
+
         json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
             let cls = 'json-number';
@@ -449,6 +571,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     cls = 'json-key';
                 } else {
                     cls = 'json-string';
+                    // 문자열 값인 경우, \n을 실제 개행으로 변환하여 가독성 확보
+                    // 단, 키(key)가 아닌 값(value)인 경우에만 적용
+                    match = match.replace(/\\n/g, '\n');
                 }
             } else if (/true|false/.test(match)) {
                 cls = 'json-boolean';
@@ -479,7 +604,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     chrome.storage.local.get('debugLogs', (data) => {
-        if (data.debugLogs) renderLogs(data.debugLogs);
+        if (data.debugLogs) {
+            renderLogs(data.debugLogs);
+        } else {
+            console.log("No debug logs found, rendering empty state.");
+            renderLogs([]);
+        }
     });
 
     chrome.storage.onChanged.addListener((changes, area) => {

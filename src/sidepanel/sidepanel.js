@@ -3,6 +3,7 @@ import { UIManager } from './ui-manager.js';
 import { SummaryManager } from './summary-manager.js';
 import { PromptManager, TONE_INSTRUCTIONS, ROUTER_PROMPT } from './prompt-manager.js';
 import { SessionManager } from './session-manager.js';
+import { logger } from '../utils/log-manager.js';
 
 const aiService = new AIService();
 const uiManager = new UIManager();
@@ -17,13 +18,22 @@ const sessionManager = new SessionManager(aiService, uiManager, {
         isLocalSessionSynced = false; // 다음 전송 시 히스토리 전체 주입
         aiService.destroy(); // 기존 세션(이전 대화 기억) 제거
 
-        saveDebugLog('INFO', `세션 복구됨: ${conversationHistory.length}개의 메시지`);
+        logger.info('SessionManager', `세션 복구됨: ${conversationHistory.length}개의 메시지`);
     }
 });
 
 // SummaryManager 초기화 (종속성 및 콜백 전달)
+// SummaryManager 내부도 수정해야 하지만, 일단 콜백으로 logger.log를 전달하거나 내부에서 imporing하게 해야 함.
+// 여기서는 saveDebugLog 호환성을 위해 래퍼를 전달하거나 SummaryManager가 직접 쓰게 변경 필요.
+// SummaryManager.js를 직접 수정하는 것이 깔끔함. 일단 여기서는 콜백 제거.
 const summaryManager = new SummaryManager(aiService, uiManager, {
-    saveDebugLog: saveDebugLog,
+    saveDebugLog: (type, msg, sessionName) => {
+        logger.log('INFO', 'SummaryManager', msg, {
+            type,
+            sessionName,
+            mode: aiService.isCloudMode ? 'Cloud' : 'Local'
+        });
+    },
     addToHistory: addToHistory
 });
 
@@ -59,43 +69,6 @@ function addToHistory(role, text) {
     if (conversationHistory.length > 15) {
         conversationHistory.shift();
     }
-}
-
-
-/**
- * 디버그 로그 저장
- * 옵션에서 로그 활성화 시 storage.local에 로그를 기록합니다.
- */
-function saveDebugLog(type, content, customSessionName = null) {
-    chrome.storage.sync.get('enableDebugLog', (data) => {
-        if (data.enableDebugLog) {
-            // 세션 이름 가져오기 (커스텀 > 현재 세션 > null)
-            let sessionName = customSessionName;
-            let sessionId = null;
-
-            if (!sessionName && sessionManager && sessionManager.currentSession) {
-                // 제목이 없으면 빈 문자열(또는 null) 유지 -> "새로운 대화" 기본값 제거
-                sessionName = sessionManager.currentSession.title;
-                sessionId = sessionManager.currentSession.id;
-            }
-
-            const logEntry = {
-                timestamp: Date.now(),
-                type: type,
-                model: aiService.isCloudMode ? 'Cloud' : 'Local ',
-                sessionName: sessionName,
-                sessionId: sessionId,
-                content: content
-            };
-
-            chrome.storage.local.get('debugLogs', (localData) => {
-                const logs = localData.debugLogs || [];
-                logs.push(logEntry);
-                if (logs.length > 100) logs.shift(); // 최대 100개 유지
-                chrome.storage.local.set({ debugLogs: logs });
-            });
-        }
-    });
 }
 
 // --- 초기화 (Initialization) ---
@@ -373,7 +346,7 @@ async function sendMessage() {
         analyzingBubble.remove();
     }
 
-    saveDebugLog('INFO', `Detected Intent: ${intent}`);
+    logger.info('Router', `Detected Intent: ${intent}`);
 
     // ---------------------------------------------------------
     // 의도에 따른 분기 처리
@@ -488,7 +461,10 @@ async function sendMessage() {
         // AI 실행 및 결과 처리
         // ---------------------------------------------------------
 
-        saveDebugLog('REQUEST', finalPrompt);
+        logger.info('AI', 'Request Sent', {
+            prompt: finalPrompt,
+            mode: aiService.isCloudMode ? 'Cloud' : 'Local'
+        });
 
         // 컨텍스트 소비 (UI용)
         activeContexts = [];
@@ -511,7 +487,10 @@ async function sendMessage() {
             addToHistory('model', finalResponse);
         }
 
-        saveDebugLog('RESPONSE', finalResponse);
+        logger.info('AI', 'Response Received', {
+            response: finalResponse,
+            mode: aiService.isCloudMode ? 'Cloud' : 'Local'
+        });
 
     } catch (e) {
         console.error(e);
@@ -520,7 +499,7 @@ async function sendMessage() {
         } else {
             uiManager.appendMessage('system', "❌ 오류: " + e.message);
         }
-        saveDebugLog('ERROR', e.message);
+        logger.error('System', e.message);
     } finally {
         if (revertToLocal) {
             aiService.isCloudMode = false; //Local 모드로 전환

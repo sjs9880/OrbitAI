@@ -185,21 +185,37 @@
                     <h2>대화 로그</h2>
                 </div>
 
-                <div class="log-viewer-controls">
-                    <div class="log-filters">
-                        <button class="filter-btn active" data-filter="ALL">전체</button>
-                        <button class="filter-btn" data-filter="SYSTEM">System</button>
-                        <button class="filter-btn" data-filter="USER">User</button>
-                        <button class="filter-btn" data-filter="ERROR">Error</button>
+                <div class="log-viewer-controls" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <input type="text" id="log-search-input" class="styled-input" placeholder="로그 검색 (메시지, 데이터...)"
+                            style="flex: 1; min-width: 200px; padding: 6px 10px;">
+                        <select id="log-category-filter" class="styled-select" style="width: auto; padding: 6px 10px;">
+                            <option value="ALL">전체 카테고리</option>
+                            <option value="System">System</option>
+                            <option value="AI">AI</option>
+                            <option value="Router">Router</option>
+                            <option value="SessionManager">SessionManager</option>
+                            <option value="SummaryManager">SummaryManager</option>
+                            <option value="Sidepanel">Sidepanel</option>
+                            <option value="AI-Service">AI-Service</option>
+                        </select>
                     </div>
-                    <div class="log-actions">
-                        <label class="log-checkbox">
-                            <input type="checkbox" id="debug-toggle" style="margin-right: 8px;">
-                            로그 기록 활성화
-                        </label>
-                        <button id="clear-log-btn" class="btn-secondary"
-                            style="font-size: 0.85rem; padding: 6px 12px;">로그
-                            비우기</button>
+                    <div class="log-filters"
+                        style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display:flex; gap: 5px;">
+                            <button class="filter-btn active" data-filter="ALL">ALL</button>
+                            <button class="filter-btn" data-filter="INFO">INFO</button>
+                            <button class="filter-btn" data-filter="WARN">WARN</button>
+                            <button class="filter-btn" data-filter="ERROR">ERROR</button>
+                        </div>
+                        <div class="log-actions">
+                            <label class="log-checkbox">
+                                <input type="checkbox" id="debug-toggle" style="margin-right: 8px;">
+                                로깅 활성화
+                            </label>
+                            <button id="clear-log-btn" class="btn-secondary"
+                                style="font-size: 0.85rem; padding: 6px 12px;">로그 비우기</button>
+                        </div>
                     </div>
                 </div>
 

@@ -35,7 +35,7 @@ export class SummaryManager {
         if (!tab) throw new Error("활성 탭을 찾을 수 없습니다.");
 
         // YouTube 감지
-        const isYouTube = tab.url.includes('youtube.com/watch');
+        const isYouTube = (tab.url || "").includes('youtube.com/watch');
 
         // Readability.js 주입 (유튜브가 아니고, 본문 추출일 때만)
         if (target === 'content' && !isYouTube) {
@@ -45,103 +45,122 @@ export class SummaryManager {
                     files: ['assets/lib/Readability.js']
                 });
             } catch (e) {
-                console.warn("Readability 로드 실패 (이미 로드되었거나 권한 문제):", e);
+                // 이미 로드되었거나, 권한이 없거나, 제한된 페이지인 경우
+                // 여기서 에러가 나더라도 아래 본문 추출 시도에서 처리되거나 Catch될 것이므로 경고만 로그
+                console.warn("Readability 로드 실패 (제한된 페이지 가능성):", e);
             }
         }
 
-        const result = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: (targetMode, limit, isYT) => {
-                let content = "";
-                const doc = document;
+        try {
+            const result = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: (targetMode, limit, isYT) => {
+                    let content = "";
+                    let missingTranscript = false;
+                    const doc = document;
 
-                try {
-                    // ---------------------------------------------------------
-                    // CASE 1: YouTube Special Logic
-                    // ---------------------------------------------------------
-                    if (isYT && targetMode === 'content') {
-                        // 1. 제목
-                        const titleEl = doc.querySelector('h1.ytd-video-primary-info-renderer') || doc.querySelector('#title h1');
-                        const title = titleEl ? titleEl.innerText : "";
+                    try {
+                        // ---------------------------------------------------------
+                        // CASE 1: YouTube Special Logic
+                        // ---------------------------------------------------------
+                        if (isYT && targetMode === 'content') {
+                            // 1. 제목
+                            const titleEl = doc.querySelector('h1.ytd-video-primary-info-renderer') || doc.querySelector('#title h1');
+                            const title = titleEl ? titleEl.innerText : "";
 
-                        // 2. 설명창 (더보기 버튼이 눌려있지 않아도 텍스트가 존재하면 가져옴)
-                        const descEl = doc.querySelector('#description-inline-expander') || doc.querySelector('#description');
-                        const description = descEl ? descEl.innerText : "";
+                            // 2. 설명창 (더보기 버튼이 눌려있지 않아도 텍스트가 존재하면 가져옴)
+                            const descEl = doc.querySelector('#description-inline-expander') || doc.querySelector('#description');
+                            const description = descEl ? descEl.innerText : "";
 
-                        // 3. 스크립트 (Transcript) - 사용자가 패널을 열어둔 경우
-                        // ytd-transcript-segment-renderer: 자막 한 줄 한 줄의 컨테이너
-                        const scripts = doc.querySelectorAll('ytd-transcript-segment-renderer');
-                        let scriptText = "";
+                            // 3. 스크립트 (Transcript) - 사용자가 패널을 열어둔 경우
+                            // ytd-transcript-segment-renderer: 자막 한 줄 한 줄의 컨테이너
+                            const scripts = doc.querySelectorAll('ytd-transcript-segment-renderer');
+                            let scriptText = "";
 
-                        if (scripts.length > 0) {
-                            scriptText = "\n[Video Transcript]\n";
-                            scripts.forEach(el => {
-                                // 시간 정보 제외하고 텍스트만 추출 (segment-text class)
-                                const textEl = el.querySelector('.segment-text');
-                                if (textEl) scriptText += textEl.innerText + " ";
-                            });
-                        } else {
-                            scriptText = "\n(스크립트 패널이 닫혀 있거나 자막이 없습니다. 스크립트 요약을 원하시면 '스크립트 표시'를 눌러주세요.)";
+                            if (scripts.length > 0) {
+                                scriptText = "\n[Video Transcript]\n";
+                                scripts.forEach(el => {
+                                    // 시간 정보 제외하고 텍스트만 추출 (segment-text class)
+                                    const textEl = el.querySelector('.segment-text');
+                                    if (textEl) scriptText += textEl.innerText + " ";
+                                });
+                            } else {
+                                // 자막이 없는 경우 플래그 설정
+                                missingTranscript = true;
+                            }
+
+                            // 통합
+                            content = `[Video Title]: ${title}\n\n[Description]:\n${description}\n${scriptText}`;
                         }
 
-                        // 통합
-                        content = `[Video Title]: ${title}\n\n[Description]:\n${description}\n${scriptText}`;
-                    }
+                        // ---------------------------------------------------------
+                        // CASE 2: General Comments (YouTube & Others)
+                        // ---------------------------------------------------------
+                        else if (targetMode === 'comments') {
+                            // 유튜브 댓글 태그 추가 (ytd-comment-thread-renderer)
+                            const commentSelectors = [
+                                '.u_cbox_content_wrap', // 네이버
+                                '.comment-list',        // 티스토리
+                                '#comments',
+                                'ytd-comment-thread-renderer #content-text', // 유튜브 댓글 내용
+                                '.reply_view',
+                                '.comment_area',
+                                '.alex-comment-area'
+                            ];
 
-                    // ---------------------------------------------------------
-                    // CASE 2: General Comments (YouTube & Others)
-                    // ---------------------------------------------------------
-                    else if (targetMode === 'comments') {
-                        // 유튜브 댓글 태그 추가 (ytd-comment-thread-renderer)
-                        const commentSelectors = [
-                            '.u_cbox_content_wrap', // 네이버
-                            '.comment-list',        // 티스토리
-                            '#comments',
-                            'ytd-comment-thread-renderer #content-text', // 유튜브 댓글 내용
-                            '.reply_view',
-                            '.comment_area',
-                            '.alex-comment-area'
-                        ];
-
-                        let commentsText = "";
-                        for (const sel of commentSelectors) {
-                            const elements = doc.querySelectorAll(sel);
-                            elements.forEach(el => {
-                                commentsText += el.innerText + "\n";
-                            });
+                            let commentsText = "";
+                            for (const sel of commentSelectors) {
+                                const elements = doc.querySelectorAll(sel);
+                                elements.forEach(el => {
+                                    commentsText += el.innerText + "\n";
+                                });
+                            }
+                            content = commentsText;
                         }
-                        content = commentsText;
-                    }
 
-                    // ---------------------------------------------------------
-                    // CASE 3: General Content (Readability)
-                    // ---------------------------------------------------------
-                    else if (targetMode === 'content') {
-                        if (window.Readability) {
-                            const article = new window.Readability(doc.cloneNode(true)).parse();
-                            content = article ? article.textContent : doc.body.innerText;
-                        } else {
-                            content = doc.body.innerText;
+                        // ---------------------------------------------------------
+                        // CASE 3: General Content (Readability)
+                        // ---------------------------------------------------------
+                        else if (targetMode === 'content') {
+                            if (window.Readability) {
+                                const article = new window.Readability(doc.cloneNode(true)).parse();
+                                content = article ? article.textContent : doc.body.innerText;
+                            } else {
+                                content = doc.body.innerText;
+                            }
                         }
+
+                    } catch (e) {
+                        console.error("Extraction error:", e);
+                        content = "";
                     }
 
-                } catch (e) {
-                    console.error("Extraction error:", e);
-                    content = "";
-                }
+                    return {
+                        content: content.replace(/\s+/g, ' ').trim().substring(0, limit),
+                        missingTranscript: missingTranscript
+                    };
+                },
+                args: [target, maxChars, isYouTube] // isYouTube 플래그 전달
+            });
 
-                return content.replace(/\s+/g, ' ').trim().substring(0, limit);
-            },
-            args: [target, maxChars, isYouTube] // isYouTube 플래그 전달
-        });
+            const { content: pageText, missingTranscript } = result[0].result;
 
-        const pageText = result[0].result;
+            return {
+                text: pageText || "",
+                title: tab.title,
+                url: tab.url,
+                missingTranscript: missingTranscript || false
+            };
 
-        return {
-            text: pageText || "",
-            title: tab.title,
-            url: tab.url
-        };
+        } catch (e) {
+            console.warn("Script execution failed (Restricted URL or permission error):", e);
+            // 스크립트 실행 실패 시 (제한된 URL 등) 빈 내용 반환하여 크래시 방지
+            return {
+                text: "",
+                title: tab.title || "Restricted Page",
+                url: tab.url || "restricted://"
+            };
+        }
     }
 
     /**
@@ -152,14 +171,15 @@ export class SummaryManager {
 
         try {
             // 1. 텍스트 추출 (getPageText 재사용, 본문 모드)
-            const { text, title, url } = await this.getPageText('content');
+            // { text, title, url, missingTranscript } 반환
+            const { text, title, url, missingTranscript } = await this.getPageText('content');
             const tabInfo = { title, url };
 
             // 2. 모드별 분기 처리
             if (this.aiService.isCloudMode) {
-                await this.processCloudSummary(text, tabInfo);
+                await this.processCloudSummary(text, tabInfo, missingTranscript);
             } else {
-                await this.processLocalChunkedSummary(text, tabInfo);
+                await this.processLocalChunkedSummary(text, tabInfo, missingTranscript);
             }
 
         } catch (e) {
@@ -175,12 +195,16 @@ export class SummaryManager {
      * [Cloud Mode] Bulk Processing
      * 분할 없이 전체 전송 (Gemini Flash 모델 활용)
      */
-    async processCloudSummary(text, tabInfo) {
+    async processCloudSummary(text, tabInfo, missingTranscript = false) {
         const prompt = `<Action Instruction>\n다음 웹 페이지의 내용을 핵심 사항을 중심으로 요약해 알기 쉽게 재구성 하여 작성해주세요.\n\n[Page Info]\nTitle: ${tabInfo.title}\nURL: ${tabInfo.url}\n\n[Page Content]\n${text}</Action Instruction>`;
 
         const sessionName = `[Page Summary] ${tabInfo.title}`;
         this.callbacks.saveDebugLog('REQUEST', prompt, sessionName);
         this.uiManager.appendMessage('user', "📄 현재 페이지 요약해줘 (Cloud)", 'cloud');
+
+        if (missingTranscript) {
+            this.uiManager.appendMessage('system', "⚠️ 자막을 찾을 수 없습니다. 영상 제목과 설명만으로 요약합니다.\n(더 정확한 요약을 원하시면 영상의 '스크립트 표시'를 눌러주세요.)");
+        }
 
         // Cloud는 처리 시간이 걸릴 수 있으므로 스피너와 함께 메시지 표시
         const responseBubble = this.uiManager.appendMessage('system', "☁️ 클라우드 AI가 전체 내용을 분석 중입니다...");
@@ -213,8 +237,12 @@ export class SummaryManager {
      * [Local Mode] Smart Chunking + Map-Reduce
      * 텍스트를 문맥 단위로 쪼개어 순차 요약 후 통합
      */
-    async processLocalChunkedSummary(text, tabInfo) {
+    async processLocalChunkedSummary(text, tabInfo, missingTranscript = false) {
         this.uiManager.appendMessage('user', "📄 현재 페이지 요약해줘 (Local)", 'local');
+
+        if (missingTranscript) {
+            this.uiManager.appendMessage('system', "⚠️ 자막을 찾을 수 없습니다. 영상 제목과 설명만으로 요약합니다.\n(더 정확한 요약을 원하시면 영상의 '스크립트 표시'를 눌러주세요.)");
+        }
         const statusBubble = this.uiManager.appendMessage('system', "분석 시작...");
 
         // 1. 텍스트 길이 확인 및 분기 처리

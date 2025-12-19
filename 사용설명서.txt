@@ -1,0 +1,20 @@
+ObitAI : Chrome Gemini Nano 기반 AI 어시스턴트
+
+[설치 방법]
+1. Chrome 주소창에 "chrome://extensions" 입력 후 이동
+2. 우측 상단 "개발자 모드" 스위치 켜기
+3. "압축해제된 확장 프로그램을 로드합니다" 버튼 클릭
+4. 다운로드 받은 "OrbitAI" 폴더 선택
+
+[간단 사용법]
+- 실행: 크롬 툴바의 Orbit 아이콘 클릭
+- 채팅: 보고 있는 웹 페이지 내용에 대해 바로 질문 가능
+- 퀵 액션: 텍스트 드래그 후 나타나는 버튼으로 요약/번역/교정
+
+[필수 설정 - Local AI]
+Gemini Nano 사용을 위해 chrome://flags 에서 다음 2가지 설정 필요:
+1. Enables optimization guide on device -> "Enabled BypassPerfRequirement"
+2. Prompt API for Gemini Nano -> "Enabled"
+
+더 자세한 정보와 최신 업데이트 내역은 아래 링크를 참고하세요:
+https://github.com/sjs9880/OrbitAI

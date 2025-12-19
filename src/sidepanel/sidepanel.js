@@ -255,9 +255,6 @@ function handlePendingText(text) {
 /**
  * 컨텍스트 칩 UI 업데이트
  */
-/**
- * 컨텍스트 칩 UI 업데이트
- */
 function renderChips() {
     uiManager.renderContextChips(activeContexts, (index) => {
         // 삭제되는 컨텍스트 번호 (1-based)
@@ -390,7 +387,13 @@ async function sendMessage() {
             // 데이터 수집 (타겟 분리)
             const target = isCommentMode ? 'comments' : 'content';
             // Safety Cap: 6000자
-            const { text: fetchedText, title, url } = await summaryManager.getPageText(target, 6000);
+            // getPageText 수정됨: { text, title, url, missingTranscript } 반환
+            const { text: fetchedText, title, url, missingTranscript } = await summaryManager.getPageText(target, 6000);
+
+            // [UX 개선] 자막이 없는 경우 사용자에게 알림
+            if (missingTranscript) {
+                uiManager.appendMessage('system', "⚠️ 자막을 찾을 수 없습니다. 영상 제목과 설명만으로 답변합니다.\n(더 정확한 답변을 원하시면 영상의 '스크립트 표시'를 눌러주세요.)");
+            }
 
             // 데이터 검증
             if (!fetchedText || fetchedText.length < 10) {

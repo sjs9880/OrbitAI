@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Orbit SidePanel</title>
+    <link rel="stylesheet" href="../../assets/styles/styles.css">
+</head>
+
+<body>
+
+
+    <!-- 1. 상단 고정 영역 (헤더 + 히스토리) -->
+    <div class="header-container">
+        <div class="chat-header">
+            <button id="btn-new-chat" class="header-btn">
+                <span class="icon">➕</span>
+                <span class="label">새 채팅</span>
+            </button>
+            <button id="btn-options-page" class="header-btn icon-only" title="설정">
+                <span class="icon">⚙️</span>
+            </button>
+        </div>
+
+        <div id="history-chips-container" class="history-chips-container">
+            <!-- 칩들이 여기에 동적으로 추가됨 -->
+        </div>
+    </div>
+
+    <!-- 2. 중앙: 채팅 메시지 영역 -->
+    <div id="chat-messages" class="chat-messages">
+        <div class="message system">
+            <div class="bubble">
+                <p>안녕하세요! Orbit AI 입니다. 👋</p>
+                <p>작성 중인 글을 드래그하거나, 아래에 질문을 입력해 보세요.</p>
+            </div>
+        </div>
+    </div>
+    <button id="scroll-to-bottom-btn" class="scroll-bottom-btn hidden" title="맨 아래로 이동">⬇️</button>
+
+    <!-- 3. 하단: Floating 입력 영역 -->
+    <div class="input-wrapper">
+        <!-- 컨텍스트 칩 -->
+        <div id="context-chips-area" class="context-chips-area"></div>
+
+        <div class="input-box">
+            <textarea id="chat-input" placeholder="무엇이든 물어보세요..." rows="1"></textarea>
+
+            <div class="toolbar">
+                <div class="left-tools">
+                    <button id="btn-model-toggle" class="tool-icon-btn" title="AI 모드 전환">
+                        <span class="label">💻 Local AI</span>
+                    </button>
+                    <div class="divider"></div>
+                    <button id="btn-tone-toggle" class="tool-icon-btn" title="톤 앤 매너 변경">
+                        <span class="icon">🎭</span>
+                        <span class="label">기본</span>
+                    </button>
+                </div>
+                <button id="send-btn" class="send-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 퀵 액션 (입력창 아래 배치) -->
+        <div class="quick-actions">
+            <button class="action-chip" data-action="search">🔍 검색</button>
+            <button class="action-chip" data-action="translate">🌐 번역</button>
+            <button class="action-chip" data-action="campus">📝 교정</button>
+            <button class="action-chip" id="btn-page-summary">📄 페이지 요약</button> <!-- New Button -->
+        </div>
+    </div>
+
+    <!-- 하단 상태바 -->
+    <div id="status-bar" class="status-bar">준비 완료</div>
+
+    <script src="../../assets/lib/marked.min.js"></script>
+    <script type="module" src="sidepanel.js"></script>
+</body>
+
+</html>

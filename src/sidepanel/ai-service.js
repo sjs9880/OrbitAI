@@ -148,8 +148,8 @@ export class AIService {
         // API 키 및 모델 ID 가져오기
         const data = await chrome.storage.sync.get(['geminiApiKey', 'geminiModelId']);
         const apiKey = data.geminiApiKey;
-        // 기본값: gemini-2.0-flash (사용자 피드백 반영)
-        const modelId = data.geminiModelId || 'gemini-2.0-flash';
+        // 기본값: gemini-2.5-flash (사용자 피드백 반영)
+        const modelId = data.geminiModelId || 'gemini-2.5-flash';
 
         if (!apiKey) throw new Error("API Key가 설정되지 않았습니다. 설정 페이지에서 키를 입력해주세요.");
 
@@ -217,7 +217,7 @@ export class AIService {
             const result = await session.prompt(userPrompt);
             return result;
         } catch (e) {
-            console.warn("[AIService] 독립 세션 실행 중 오류:", e);
+            console.warn("독립 세션 실행 중 오류:", e);
             throw e;
         } finally {
             // 사용 완료된 세션은 반드시 파괴하여 메모리 누수 방지

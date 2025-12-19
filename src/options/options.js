@@ -262,17 +262,15 @@ document.addEventListener('DOMContentLoaded', () => {
             keyStatusMsg.textContent = "✅ 저장된 API 키가 있습니다.";
             keyStatusMsg.style.color = "green";
         }
-        if (data.geminiModelId && modelSelect) {
-            modelSelect.value = data.geminiModelId;
+        if (modelSelect) {
+            // 값이 없으면 'gemini-2.5-flash' 기본값
+            modelSelect.value = data.geminiModelId || 'gemini-2.5-flash';
         }
         if (debugToggle) {
             debugToggle.checked = !!data.enableDebugLog;
         }
-        const historyToggle = document.getElementById('history-toggle');
-        if (historyToggle) {
-            historyToggle.checked = !!data.enableHistory;
-        }
     });
+
 
     if (saveKeyBtn) {
         saveKeyBtn.addEventListener('click', () => {
@@ -309,16 +307,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const historyToggle = document.getElementById('history-toggle');
-    if (historyToggle) {
-        historyToggle.addEventListener('change', () => {
-            chrome.storage.sync.set({ enableHistory: historyToggle.checked });
-        });
-    }
+
 
     // --- 로그 뷰어 로직 ---
-    // --- 로그 뷰어 로직 ---
-
     // 필터 버튼 이벤트 연결
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {

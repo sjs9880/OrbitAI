@@ -219,12 +219,9 @@ export class SummaryManager {
             this.callbacks.saveDebugLog('RESPONSE', finalResponse, `[Page Summary] ${tabInfo.title}`);
             this.uiManager.setStatus("요약 완료", "#10b981");
 
-            // 히스토리 저장
-            const { enableHistory } = await chrome.storage.sync.get('enableHistory');
-            if (enableHistory) {
-                this.callbacks.addToHistory('user', `📄 현재 페이지 요약해줘 (Cloud)\n[Page Info] Title: ${tabInfo.title}`);
-                this.callbacks.addToHistory('model', finalResponse);
-            }
+            // 히스토리 저장 (상시 활성화)
+            this.callbacks.addToHistory('user', `📄 현재 페이지 요약해줘 (Cloud)\n[Page Info] Title: ${tabInfo.title}`);
+            this.callbacks.addToHistory('model', finalResponse);
         } catch (e) {
             console.error(e);
             this.callbacks.saveDebugLog('ERROR', `Cloud Summary Failed: ${e.message}`); // 에러 로그 추가
@@ -264,12 +261,9 @@ export class SummaryManager {
                 this.callbacks.saveDebugLog('RESPONSE', summary, sessionName);
                 this.uiManager.setStatus("요약 완료", "#10b981");
 
-                // 히스토리 저장
-                const { enableHistory } = await chrome.storage.sync.get('enableHistory');
-                if (enableHistory) {
-                    this.callbacks.addToHistory('user', `📄 현재 페이지 요약해줘 (Local)\n[Page Info] Title: ${tabInfo.title}`);
-                    this.callbacks.addToHistory('model', summary);
-                }
+                // 히스토리 저장 (상시 활성화)
+                this.callbacks.addToHistory('user', `📄 현재 페이지 요약해줘 (Local)\n[Page Info] Title: ${tabInfo.title}`);
+                this.callbacks.addToHistory('model', summary);
 
             } catch (e) {
                 console.error(e);
@@ -344,12 +338,9 @@ ${combinedText}`;
                 this.uiManager.updateBubble(statusBubble, finalSummary);
                 this.callbacks.saveDebugLog('RESPONSE', finalSummary, sessionName);
 
-                // 히스토리 저장
-                const { enableHistory } = await chrome.storage.sync.get('enableHistory');
-                if (enableHistory) {
-                    this.callbacks.addToHistory('user', `📄 현재 페이지 요약해줘 (Local)\n[Page Info] Title: ${tabInfo.title}`);
-                    this.callbacks.addToHistory('model', finalSummary);
-                }
+                // 히스토리 저장 (상시 활성화)
+                this.callbacks.addToHistory('user', `📄 현재 페이지 요약해줘 (Local)\n[Page Info] Title: ${tabInfo.title}`);
+                this.callbacks.addToHistory('model', finalSummary);
 
             } catch (e) {
                 // 실패 시 합본이라도 보여줌

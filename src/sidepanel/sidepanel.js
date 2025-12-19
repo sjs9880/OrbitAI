@@ -166,7 +166,7 @@ async function updateUIState() {
     // 사용자가 보기 편한 이름으로 변환 (옵션 값 -> 표시 값)
     // gemini-2.0-flash -> Gemini 2.0 Flash
     // gemini-2.5-flash -> Gemini 2.5 Flash
-    let displayModelName = "Gemini 2.0 Flash"; // 기본값
+    let displayModelName = "Gemini 2.5 Flash"; // 기본값
 
     if (data.geminiModelId) {
         if (data.geminiModelId === 'gemini-2.5-flash') {
@@ -317,8 +317,8 @@ async function sendMessage() {
     if (!text && activeContexts.length === 0 && !pendingActionInstruction) return;
 
     // [Core Rule 1] 사용자 메시지 UI 표시 & 히스토리 저장 (Clean User Query)
-    // 히스토리 설정 확인
-    const { enableHistory } = await chrome.storage.sync.get('enableHistory');
+    // 히스토리 상시 활성화 (옵션 제거됨)
+    const enableHistory = true;
 
     // 사용자 메시지 UI 표시 & 히스토리 저장
     if (text) {
@@ -326,9 +326,7 @@ async function sendMessage() {
         uiManager.appendMessage('user', text, aiService.isCloudMode ? 'cloud' : 'local', [...activeContexts]);
 
         // 히스토리에는 순수 텍스트만 저장
-        if (enableHistory) {
-            addToHistory('user', text);
-        }
+        addToHistory('user', text);
     } else {
         // 텍스트 없이 컨텍스트만 있는 경우
         uiManager.appendMessage('user', '(컨텍스트만 전송)', aiService.isCloudMode ? 'cloud' : 'local', [...activeContexts]);
@@ -492,8 +490,8 @@ async function sendMessage() {
             finalResponse = chunk;
         });
 
-        // AI 응답 히스토리 저장 (필수)
-        if (enableHistory && finalResponse) {
+        // AI 응답 히스토리 저장
+        if (finalResponse) {
             addToHistory('model', finalResponse);
         }
 

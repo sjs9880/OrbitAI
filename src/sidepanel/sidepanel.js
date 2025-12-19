@@ -300,9 +300,7 @@ async function analyzeIntent(userText) {
             .join('\n');
 
         // [System] 역할 및 분류 규칙 (ROUTER_PROMPT 포함)
-        const systemPrompt = `당신은 대화의 맥락을 고려하여 사용자의 의도를 분류하는 라우터입니다.
-다음 분류 규칙을 엄격히 따르세요:
-${ROUTER_PROMPT}`;
+        const systemPrompt = `${ROUTER_PROMPT}`;
 
         // [User] 판단 대상 데이터 (히스토리 + 입력)
         const userPrompt = `[Recent Conversation History]
@@ -382,6 +380,7 @@ async function sendMessage() {
     // ---------------------------------------------------------
 
     let responseBubble = null;
+    let revertToLocal = false;
 
     try {
         // CASE A: [SUMMARIZE] 전체 요약
@@ -447,14 +446,11 @@ async function sendMessage() {
         // CASE C: [SEARCH] 검색
         if (intent === "SEARCH") {
             if (!aiService.isCloudMode) {
-                // Local -> Cloud 자동 전환
-                uiManager.appendMessage('system', "🌍 검색을 위해 Cloud 모드로 자동 전환합니다...");
+                // Local -> Cloud 일시 전환
+                uiManager.appendMessage('system', "🌍 검색을 위해 Cloud AI를 호출합니다...");
 
-                // 모드 전환
                 aiService.isCloudMode = true;
-                // isLocalSessionSynced 등의 상태 관리는 updateUIState나 이후 로직에서 처리됨
-                // (Cloud 모드는 historyContext를 매번 전체 주입하므로 sync 플래그 영향 적음)
-
+                revertToLocal = true; // 복구 플래그 설정
                 await updateUIState();
             }
             // Cloud Search는 기본 generate 프롬프트(Cloud 모델의 기능)에 의존
@@ -525,6 +521,13 @@ async function sendMessage() {
             uiManager.appendMessage('system', "❌ 오류: " + e.message);
         }
         saveDebugLog('ERROR', e.message);
+    } finally {
+        if (revertToLocal) {
+            aiService.isCloudMode = false; //Local 모드로 전환
+            aiService.destroy(); //기존 세션 파괴
+            isLocalSessionSynced = false; //다음 요청 시 히스토리가 포함된 새 세션을 생성하도록 유도
+            await updateUIState();
+        }
     }
 }
 

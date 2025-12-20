@@ -335,7 +335,11 @@ async function sendMessage() {
     let intent = "GENERAL";
 
     if (pendingActionInstruction || activeContexts.length > 0) {
-        intent = "GENERAL";
+        if (isSearchAction) {
+            intent = "SEARCH";
+        } else {
+            intent = "GENERAL";
+        }
     } else {
         // UI에 분석 중 표시 (시스템 메시지가 히스토리에 남지 않도록 주의)
         const analyzingBubble = uiManager.appendMessage('system', "🤔 생각하는 중...");
@@ -418,6 +422,12 @@ async function sendMessage() {
 
         // CASE C: [SEARCH] 검색
         if (intent === "SEARCH") {
+            // [NEW] 검색 로직 통일: 자동 감지된 경우에도 명시적 지시사항 주입
+            if (!pendingActionInstruction) {
+                pendingActionInstruction = "'input'에 대해 검색하고 최신 정보를 기반으로 설명해주세요.";
+            }
+            isSearchAction = true;
+
             if (!aiService.isCloudMode) {
                 // Local -> Cloud 일시 전환
                 uiManager.appendMessage('system', "🌍 검색을 위해 Cloud AI를 호출합니다...");
@@ -473,6 +483,7 @@ async function sendMessage() {
         // 액션 초기화
         if (pendingActionInstruction) {
             pendingActionInstruction = null;
+            isSearchAction = false;
             document.querySelectorAll('.action-chip').forEach(btn => btn.classList.remove('active'));
         }
 
@@ -594,7 +605,7 @@ document.querySelectorAll('.action-chip').forEach(btn => {
             isSearchAction = false; // 기본값 초기화
 
             if (action === 'search') {
-                instruction = "'input'에 대해 검색하고 최신 정보를 기반으로 설명해주세요.";
+                instruction = "'input'에 대해 검색하고 최신 정보를 기반으로 답변해주세요.";
                 isSearchAction = true;
             }
             if (action === 'translate') instruction = "'input'을 읽고 별도로 요청한 언어 또는 한국어로 자연스럽게 번역해주세요. 또, 필요한 경우 주석을 첨부하여 이해를 도와주세요.";
